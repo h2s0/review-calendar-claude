@@ -1,0 +1,4 @@
+{
+  "APP_ENV": "development",
+  "FIREBASE_PROJECT_ID": "demo-review-calendar-dev"
+}
