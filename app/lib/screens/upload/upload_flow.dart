@@ -8,7 +8,11 @@ import 'package:review_calendar/data/review_calendar_models.dart';
 import 'package:review_calendar/features/campaign/data/campaign_repository.dart';
 import 'package:review_calendar/features/notification/domain/notification_device_registration.dart';
 import 'package:review_calendar/features/notification/presentation/notification_permission_prompt.dart';
+import 'package:review_calendar/features/registration/data/apple_vision_campaign_ocr_engine.dart';
+import 'package:review_calendar/features/registration/data/device_registration_image_source.dart';
 import 'package:review_calendar/features/registration/domain/campaign_registration_draft.dart';
+import 'package:review_calendar/features/registration/domain/local_campaign_ocr.dart';
+import 'package:review_calendar/features/registration/domain/registration_image.dart';
 import 'package:review_calendar/features/registration/presentation/registration_view_model.dart';
 import 'package:review_calendar/ui/core/dashed_border.dart';
 import 'package:review_calendar/ui/core/icons/rc_icons.dart';
@@ -24,12 +28,19 @@ class UploadFlow extends StatefulWidget {
     required this.campaignRepository,
     required this.ownerId,
     this.notificationRegistration,
+    this.imageSource,
+    this.analysisService,
     super.key,
   });
   final List<String> categories;
   final CampaignRepository campaignRepository;
   final String ownerId;
   final NotificationDeviceRegistrationController? notificationRegistration;
+  // Both default to the real device/Vision-backed implementations; tests
+  // inject fakes instead of touching the image_picker or native OCR
+  // platform channels.
+  final RegistrationImageSource? imageSource;
+  final LocalCampaignAnalysisService? analysisService;
 
   @override
   State<UploadFlow> createState() => _UploadFlowState();
@@ -39,6 +50,12 @@ class _UploadFlowState extends State<UploadFlow> {
   _Step _step = _Step.select;
   double _progress = 0;
   Timer? _timer;
+  CampaignRegistrationDraft? _analysisDraft;
+  late final RegistrationImageSource _imageSource =
+      widget.imageSource ?? DeviceRegistrationImageSource();
+  late final LocalCampaignAnalysisService _analysisService =
+      widget.analysisService ??
+      const OcrCampaignAnalysisService(AppleVisionCampaignOcrEngine());
 
   @override
   void dispose() {
@@ -46,20 +63,54 @@ class _UploadFlowState extends State<UploadFlow> {
     super.dispose();
   }
 
-  void _startAnalyzing() {
+  /// "갤러리에서 선택" — picks screenshots, then runs real on-device OCR
+  /// (`OcrCampaignAnalysisService`/Apple Vision) over them. A cancelled or
+  /// empty picker selection is a silent no-op, matching how gallery pickers
+  /// normally behave.
+  Future<void> _pickAndAnalyze() async {
+    List<RegistrationImageCandidate> candidates;
+    try {
+      candidates = await _imageSource.pickGallery(
+        limit: registrationImageLimit,
+      );
+    } catch (_) {
+      candidates = const [];
+    }
+    if (candidates.isEmpty) return;
+
+    final images = <RegistrationImage>[];
+    for (final candidate in candidates) {
+      try {
+        images.add(
+          RegistrationImage(
+            id: candidate.id,
+            name: candidate.name,
+            bytes: await candidate.readBytes(),
+            mimeType: candidate.mimeType,
+          ),
+        );
+      } catch (_) {
+        // Skip an unreadable image rather than failing the whole batch.
+      }
+    }
+    if (images.isEmpty || !mounted) return;
+    _startAnalyzing(images);
+  }
+
+  void _startAnalyzing(List<RegistrationImage> images) {
     setState(() {
       _step = _Step.analyzing;
       _progress = 0;
+      _analysisDraft = null;
     });
-    const stages = [30.0, 65.0, 92.0, 100.0];
+
+    // The staged progress bar is a "working…" affordance running alongside
+    // the real analysis below — the step transition is driven by the real
+    // Future resolving, not by the animation reaching its last stage.
+    const stages = [30.0, 65.0, 92.0];
     var idx = 0;
     void tick() {
-      if (idx >= stages.length) {
-        Future.delayed(const Duration(milliseconds: 350), () {
-          if (mounted) setState(() => _step = _Step.confirm);
-        });
-        return;
-      }
+      if (idx >= stages.length) return;
       setState(() => _progress = stages[idx]);
       _timer = Timer(const Duration(milliseconds: 550), () {
         idx++;
@@ -68,6 +119,28 @@ class _UploadFlowState extends State<UploadFlow> {
     }
 
     tick();
+
+    _analysisService
+        .analyze(images)
+        .then((result) {
+          _timer?.cancel();
+          if (!mounted) return;
+          setState(() {
+            _progress = 100;
+            _analysisDraft = result.toRegistrationDraft();
+          });
+          Future.delayed(const Duration(milliseconds: 350), () {
+            if (mounted) setState(() => _step = _Step.confirm);
+          });
+        })
+        .catchError((Object _) {
+          _timer?.cancel();
+          if (!mounted) return;
+          setState(() => _step = _Step.manual);
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('분석에 실패했어요. 직접 입력해 주세요.')),
+          );
+        });
   }
 
   @override
@@ -127,7 +200,7 @@ class _UploadFlowState extends State<UploadFlow> {
             Expanded(
               child: switch (_step) {
                 _Step.select => _StepSelect(
-                  onPick: _startAnalyzing,
+                  onPick: () => unawaited(_pickAndAnalyze()),
                   onManual: () => setState(() => _step = _Step.manual),
                 ),
                 _Step.analyzing => _StepAnalyzing(progress: _progress),
@@ -136,6 +209,8 @@ class _UploadFlowState extends State<UploadFlow> {
                   categories: widget.categories,
                   campaignRepository: widget.campaignRepository,
                   ownerId: widget.ownerId,
+                  notificationRegistration: widget.notificationRegistration,
+                  initialDraft: _analysisDraft,
                   onConfirm: () => Navigator.of(context).maybePop(),
                 ),
                 _Step.manual => _StepConfirm(
@@ -481,6 +556,7 @@ class _StepConfirm extends StatefulWidget {
     required this.ownerId,
     required this.onConfirm,
     this.notificationRegistration,
+    this.initialDraft,
     this.onBack,
   });
 
@@ -489,6 +565,9 @@ class _StepConfirm extends StatefulWidget {
   final CampaignRepository campaignRepository;
   final String ownerId;
   final NotificationDeviceRegistrationController? notificationRegistration;
+  // AI-mode pre-fill from real on-device OCR (`_pickAndAnalyze`); null in
+  // manual mode, where every field starts blank/at its baseline default.
+  final CampaignRegistrationDraft? initialDraft;
   final VoidCallback onConfirm;
   final VoidCallback? onBack;
 
@@ -497,45 +576,81 @@ class _StepConfirm extends StatefulWidget {
 }
 
 class _StepConfirmState extends State<_StepConfirm> {
-  late final _brandController = TextEditingController(
-    text: widget.mode == _Mode.ai ? '르봉 파스타바 성수점' : '',
-  );
-  late final _platformController = TextEditingController(
-    text: widget.mode == _Mode.ai ? '레뷰' : '',
-  );
-  late String _category = '맛집';
+  late final TextEditingController _brandController;
+  late final TextEditingController _platformController;
+  late String _category;
   bool _visitConfirmed = true;
-  VisitSlotValue _visit = VisitSlotValue(date: MockReviewCalendarData.d(4, 18));
+  late VisitSlotValue _visit;
   DateTime? _windowStart;
   DateTime? _windowEnd;
   String? _windowTime;
   String? _windowTimeEnd;
-  final _sponsorController = TextEditingController();
-  final _feeController = TextEditingController();
-  DateTime _deadline = MockReviewCalendarData.d(5, 2);
+  late final TextEditingController _sponsorController;
+  late final TextEditingController _feeController;
+  late DateTime _deadline;
   bool _deadlineAuto = true;
   int? _alertDays = 3;
   bool _isSubmitting = false;
 
-  /// Only the manual-entry ("직접 입력하기") path writes a real campaign —
-  /// the AI-analysis path above it still runs on simulated/mock extraction
-  /// (per the product decision that this isn't real AI analysis yet), so
-  /// wiring its confirm button to Firestore would create fake campaigns
-  /// from canned placeholder text. Deferred until analysis is real.
-  RegistrationViewModel? _registrationViewModel;
+  late final RegistrationViewModel _registrationViewModel;
 
   @override
   void initState() {
     super.initState();
-    if (widget.mode == _Mode.manual) {
-      _registrationViewModel = RegistrationViewModel(
-        repository: widget.campaignRepository,
-        ownerId: widget.ownerId,
-      );
-      // `_canSubmit` reads the brand text directly rather than through
-      // `setState`-driven fields, so it needs its own listener to keep the
-      // submit button's enabled state in sync as the user types.
-      _brandController.addListener(_handleBrandChanged);
+    _applyInitialFields();
+    _registrationViewModel = RegistrationViewModel(
+      repository: widget.campaignRepository,
+      ownerId: widget.ownerId,
+    );
+    // `_canSubmit` reads the brand text directly rather than through
+    // `setState`-driven fields, so it needs its own listener to keep the
+    // submit button's enabled state in sync as the user types.
+    _brandController.addListener(_handleBrandChanged);
+  }
+
+  /// Seeds every field from `widget.initialDraft` when present (AI mode with
+  /// a real OCR result), otherwise falls back to the same baseline defaults
+  /// manual mode has always started from. AI mode's confirmed-visit panel
+  /// only ever displays a single date (see `build()` below), so a detected
+  /// date *range* collapses to its start date here rather than populating
+  /// the window fields, which AI mode never renders.
+  void _applyInitialFields() {
+    final draft = widget.initialDraft;
+    _brandController = TextEditingController(text: draft?.brand ?? '');
+    _platformController = TextEditingController(text: draft?.platform ?? '');
+
+    final draftCategory = draft?.category ?? '';
+    _category =
+        draftCategory.isNotEmpty && widget.categories.contains(draftCategory)
+        ? draftCategory
+        : '맛집';
+
+    _sponsorController = TextEditingController(
+      text: draft?.sponsoredValue ?? '',
+    );
+    _feeController = TextEditingController(text: draft?.cashFee ?? '');
+
+    final visitDateText = switch (draft?.visitAvailability) {
+      VisitDateRangeDraft(:final start) => start,
+      VisitDateOptionsDraft(dates: [final first, ...]) => first,
+      _ => null,
+    };
+    final parsedVisitDate = visitDateText == null
+        ? null
+        : DateTime.tryParse(visitDateText);
+    _visit = VisitSlotValue(
+      date: parsedVisitDate ?? MockReviewCalendarData.d(4, 18),
+      time: draft?.availableTimes.firstOrNull?.start,
+    );
+
+    final parsedDeadline = draft?.deadline == null
+        ? null
+        : DateTime.tryParse(draft!.deadline);
+    if (parsedDeadline != null) {
+      _deadline = parsedDeadline;
+      _deadlineAuto = false;
+    } else {
+      _deadline = MockReviewCalendarData.d(5, 2);
     }
   }
 
@@ -548,16 +663,14 @@ class _StepConfirmState extends State<_StepConfirm> {
     _platformController.dispose();
     _sponsorController.dispose();
     _feeController.dispose();
-    _registrationViewModel?.dispose();
+    _registrationViewModel.dispose();
     super.dispose();
   }
 
   bool get _canSubmit =>
       !_isSubmitting &&
-      (widget.mode == _Mode.ai ||
-          (_brandController.text.trim().isNotEmpty &&
-              (_visitConfirmed ||
-                  (_windowStart != null && _windowEnd != null))));
+      _brandController.text.trim().isNotEmpty &&
+      (_visitConfirmed || (_windowStart != null && _windowEnd != null));
 
   String _isoDate(DateTime date) =>
       '${date.year.toString().padLeft(4, '0')}-'
@@ -600,15 +713,9 @@ class _StepConfirmState extends State<_StepConfirm> {
   }
 
   Future<void> _handleConfirm() async {
-    final viewModel = _registrationViewModel;
-    if (viewModel == null) {
-      // AI-analysis path — still a stub (see field doc above).
-      widget.onConfirm();
-      return;
-    }
     setState(() => _isSubmitting = true);
-    viewModel.update(_buildDraft());
-    final success = await viewModel.save();
+    _registrationViewModel.update(_buildDraft());
+    final success = await _registrationViewModel.save();
     if (!mounted) return;
     setState(() => _isSubmitting = false);
     if (success) {
@@ -623,7 +730,11 @@ class _StepConfirmState extends State<_StepConfirm> {
       widget.onConfirm();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text(viewModel.message ?? '저장하지 못했어요. 다시 시도해 주세요.')),
+        SnackBar(
+          content: Text(
+            _registrationViewModel.message ?? '저장하지 못했어요. 다시 시도해 주세요.',
+          ),
+        ),
       );
     }
   }
