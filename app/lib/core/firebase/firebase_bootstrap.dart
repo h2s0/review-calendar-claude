@@ -83,7 +83,9 @@ bool shouldUseDebugAppCheckProvider(
   bool isDebugBuild = kDebugMode,
 }) => config.usesFirebaseEmulator || isDebugBuild;
 
-@visibleForTesting
+// Also used by main.dart to scope a secondary FirebaseApp for the
+// Functions emulator on Apple platforms — see `_createFunctions`'s doc
+// comment there for why that's needed.
 FirebaseOptions firebaseEmulatorOptions(AppConfig config) {
   return FirebaseOptions(
     apiKey: 'AIzaSy000000000000000000000000000000000',

@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase;
+import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:review_calendar/app/app_shell.dart';
 import 'package:review_calendar/core/config/app_config.dart';
@@ -12,6 +14,7 @@ import 'package:review_calendar/features/auth/data/auth_repository.dart';
 import 'package:review_calendar/features/auth/data/federated_auth_provider_handlers.dart';
 import 'package:review_calendar/features/auth/data/firebase_auth_repository.dart';
 import 'package:review_calendar/features/auth/data/kakao_auth_provider_handler.dart';
+import 'package:review_calendar/features/account/presentation/account_view_model.dart';
 import 'package:review_calendar/features/auth/domain/auth_user.dart';
 import 'package:review_calendar/features/auth/presentation/auth_gate.dart';
 import 'package:review_calendar/features/auth/presentation/auth_view_model.dart';
@@ -34,7 +37,7 @@ Future<void> main() async {
   await initializeKakaoSdk(config);
 
   final auth = firebase.FirebaseAuth.instance;
-  final functions = FirebaseFunctions.instanceFor(region: 'asia-northeast3');
+  final functions = await _createFunctions(config);
   final kakaoSignOut = createKakaoProviderSignOut(config);
 
   runApp(
@@ -49,6 +52,21 @@ Future<void> main() async {
                 config: config,
               ),
         providerSignOuts: [createGoogleProviderSignOut(config), ?kakaoSignOut],
+        accountDeletion: () async {
+          try {
+            await functions
+                .httpsCallable(
+                  'deleteAccount',
+                  options: HttpsCallableOptions(
+                    timeout: const Duration(seconds: 30),
+                    limitedUseAppCheckToken: true,
+                  ),
+                )
+                .call<Map<String, dynamic>>();
+          } on FirebaseFunctionsException catch (error) {
+            throw firebase.FirebaseAuthException(code: error.code);
+          }
+        },
       ),
       campaignRepositoryFactory: (user) => FirestoreCampaignRepository(
         firestore: FirebaseFirestore.instance,
@@ -74,6 +92,39 @@ Future<void> main() async {
           ),
     ),
   );
+}
+
+/// On Apple platforms, `initializeFirebase` deliberately keeps the primary
+/// `FirebaseApp` under its real `GoogleService-Info.plist` identity even in
+/// emulator mode (Kakao/Google/Apple sign-in all validate against the real,
+/// bundle-ID-registered app) — but the local Functions emulator only serves
+/// the dart-define'd emulator project ID. A callable request built from the
+/// primary app's real project ID 404s against it even though Firestore/
+/// Auth/Storage happily redirect regardless of project ID. Routing
+/// Functions through a second, emulator-scoped app fixes that without
+/// touching the primary app's identity.
+Future<FirebaseFunctions> _createFunctions(AppConfig config) async {
+  final usesAppleNativeConfig =
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.iOS ||
+          defaultTargetPlatform == TargetPlatform.macOS);
+  if (!config.usesFirebaseEmulator || !usesAppleNativeConfig) {
+    return FirebaseFunctions.instanceFor(region: 'asia-northeast3');
+  }
+  final emulatorApp = await Firebase.initializeApp(
+    name: 'emulatorFunctions',
+    options: firebaseEmulatorOptions(config),
+  );
+  final functions = FirebaseFunctions.instanceFor(
+    app: emulatorApp,
+    region: 'asia-northeast3',
+  );
+  functions.useFunctionsEmulator(
+    config.firebaseEmulatorHost ?? '127.0.0.1',
+    5001,
+    automaticHostMapping: false,
+  );
+  return functions;
 }
 
 class ReviewCalendarApp extends StatefulWidget {
@@ -124,6 +175,7 @@ class _ReviewCalendarAppState extends State<ReviewCalendarApp> {
         authenticatedBuilder: (user) => _AuthenticatedApp(
           key: ValueKey(user.id),
           ownerId: user.id,
+          authRepository: widget.authRepository,
           campaignRepository: widget.campaignRepositoryFactory(user),
           categoriesRepository: widget.categoriesRepositoryFactory(user),
           notificationRegistration: widget.notificationRegistrationFactory
@@ -139,6 +191,7 @@ class _ReviewCalendarAppState extends State<ReviewCalendarApp> {
 /// changes, so a sign-out/sign-in never leaks the previous user's data.
 class _AuthenticatedApp extends StatefulWidget {
   const _AuthenticatedApp({
+    required this.authRepository,
     required this.campaignRepository,
     required this.categoriesRepository,
     required this.ownerId,
@@ -146,6 +199,7 @@ class _AuthenticatedApp extends StatefulWidget {
     super.key,
   });
 
+  final AuthRepository authRepository;
   final CampaignRepository campaignRepository;
   final RecordCategoriesRepository categoriesRepository;
   final String ownerId;
@@ -159,6 +213,7 @@ class _AuthenticatedAppState extends State<_AuthenticatedApp> {
   late final CalendarViewModel _calendarViewModel;
   late final HomeViewModel _homeViewModel;
   late final RevenueViewModel _revenueViewModel;
+  late final AccountViewModel _accountViewModel;
 
   @override
   void initState() {
@@ -166,6 +221,7 @@ class _AuthenticatedAppState extends State<_AuthenticatedApp> {
     _calendarViewModel = CalendarViewModel(widget.campaignRepository);
     _homeViewModel = HomeViewModel(widget.campaignRepository);
     _revenueViewModel = RevenueViewModel(widget.campaignRepository);
+    _accountViewModel = AccountViewModel(widget.authRepository);
     unawaited(_initializeNotifications());
   }
 
@@ -174,6 +230,7 @@ class _AuthenticatedAppState extends State<_AuthenticatedApp> {
     _calendarViewModel.dispose();
     _homeViewModel.dispose();
     _revenueViewModel.dispose();
+    _accountViewModel.dispose();
     unawaited(widget.categoriesRepository.dispose());
     unawaited(widget.notificationRegistration?.close());
     super.dispose();
@@ -193,6 +250,7 @@ class _AuthenticatedAppState extends State<_AuthenticatedApp> {
       calendarViewModel: _calendarViewModel,
       homeViewModel: _homeViewModel,
       revenueViewModel: _revenueViewModel,
+      accountViewModel: _accountViewModel,
       campaignRepository: widget.campaignRepository,
       categoriesRepository: widget.categoriesRepository,
       ownerId: widget.ownerId,

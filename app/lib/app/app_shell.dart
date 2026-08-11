@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/material.dart';
 import 'package:review_calendar/data/review_calendar_models.dart';
+import 'package:review_calendar/features/account/presentation/account_view_model.dart';
 import 'package:review_calendar/features/calendar/presentation/calendar_view_model.dart';
 import 'package:review_calendar/features/campaign/data/campaign_repository.dart';
 import 'package:review_calendar/features/home/presentation/home_view_model.dart';
@@ -26,6 +27,7 @@ class AppShell extends StatefulWidget {
     required this.calendarViewModel,
     required this.homeViewModel,
     required this.revenueViewModel,
+    required this.accountViewModel,
     required this.campaignRepository,
     required this.categoriesRepository,
     required this.ownerId,
@@ -36,6 +38,7 @@ class AppShell extends StatefulWidget {
   final CalendarViewModel calendarViewModel;
   final HomeViewModel homeViewModel;
   final RevenueViewModel revenueViewModel;
+  final AccountViewModel accountViewModel;
   final CampaignRepository campaignRepository;
   final RecordCategoriesRepository categoriesRepository;
   final String ownerId;
@@ -98,6 +101,8 @@ class _AppShellState extends State<AppShell> {
         builder: (_) => SettingsScreen(
           categories: _categories,
           onCategoriesChanged: (next) => widget.categoriesRepository.save(next),
+          accountViewModel: widget.accountViewModel,
+          notificationRegistration: widget.notificationRegistration,
         ),
       ),
     );
