@@ -654,13 +654,13 @@ class _StepConfirmState extends State<_StepConfirm> {
       VisitDateOptionsDraft(dates: [final first, ...]) => first,
       _ => null,
     };
+    // Leaving `date` null renders as "미정" (see `_VisitSlot`) — that's the
+    // correct state when nothing was detected/entered yet, not a placeholder
+    // date standing in for a real one.
     final parsedVisitDate = visitDateText == null
         ? null
         : DateTime.tryParse(visitDateText);
-    _visit = VisitSlotValue(
-      date: parsedVisitDate ?? MockReviewCalendarData.d(4, 18),
-      time: windowTime?.start,
-    );
+    _visit = VisitSlotValue(date: parsedVisitDate, time: windowTime?.start);
 
     final parsedDeadline = draft?.deadline == null
         ? null

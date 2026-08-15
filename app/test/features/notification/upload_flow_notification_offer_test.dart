@@ -76,6 +76,14 @@ void main() {
       await tester.enterText(find.byType(TextField).first, '테스트 카페 홍대점');
       await tester.pump(const Duration(milliseconds: 100));
 
+      // The visit date starts as "미정" (undecided) and is required — see
+      // campaign_registration_draft.dart's `_validateAvailability`.
+      await tester.tap(find.text('미정').first);
+      await tester.pumpAndSettle();
+      await tester.tap(find.text('15').first);
+      await tester.tap(find.text('저장'));
+      await tester.pumpAndSettle();
+
       await tester.tap(find.text('캘린더에 등록하기'));
       await tester.pump(const Duration(milliseconds: 100));
       await tester.pump(const Duration(milliseconds: 100));
