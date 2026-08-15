@@ -140,7 +140,9 @@ class _RcIconPainter extends CustomPainter {
           )
           ..cubicTo(6, 15, 3, 17, 3, 17)
           ..lineTo(21, 17)
-          ..cubicTo(39, 17, 18, 15, 18, 8);
+          // Mirror of the left-side curve above (about x=12) — was
+          // "39, 17" (off-canvas, drawing the dome lopsided).
+          ..cubicTo(21, 17, 18, 15, 18, 8);
         canvas.drawPath(body, stroke);
         final clapper = Path()
           ..moveTo(13.73, 21)
