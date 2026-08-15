@@ -846,16 +846,8 @@ class _StepConfirmState extends State<_StepConfirm> {
               const SizedBox(height: 12),
               _FieldCard(
                 children: [
-                  _LabeledField(
-                    label: '업체명',
-                    controller: _brandController,
-                    editable: isManual,
-                  ),
-                  _LabeledField(
-                    label: '플랫폼',
-                    controller: _platformController,
-                    editable: isManual,
-                  ),
+                  _LabeledField(label: '업체명', controller: _brandController),
+                  _LabeledField(label: '플랫폼', controller: _platformController),
                   Padding(
                     padding: const EdgeInsets.all(14),
                     child: Column(
@@ -1507,14 +1499,9 @@ class _FieldCard extends StatelessWidget {
 }
 
 class _LabeledField extends StatelessWidget {
-  const _LabeledField({
-    required this.label,
-    required this.controller,
-    required this.editable,
-  });
+  const _LabeledField({required this.label, required this.controller});
   final String label;
   final TextEditingController controller;
-  final bool editable;
 
   @override
   Widget build(BuildContext context) {
@@ -1538,18 +1525,19 @@ class _LabeledField extends StatelessWidget {
               style: TextStyle(fontSize: 12, color: colors.inkSubtle),
             ),
           ),
+          // Always editable — even in AI mode, since OCR extraction can
+          // miss or misread a field (e.g. an unlabeled brand name) and the
+          // user needs a way to fix it without backing out to manual entry.
           Expanded(
-            child: editable
-                ? TextField(
-                    controller: controller,
-                    style: valueStyle,
-                    decoration: const InputDecoration(
-                      border: InputBorder.none,
-                      isDense: true,
-                      contentPadding: EdgeInsets.zero,
-                    ),
-                  )
-                : Text(controller.text, style: valueStyle),
+            child: TextField(
+              controller: controller,
+              style: valueStyle,
+              decoration: const InputDecoration(
+                border: InputBorder.none,
+                isDense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+            ),
           ),
           RcIcon(RcIconGlyph.edit, size: 14, color: colors.inkMuted),
         ],

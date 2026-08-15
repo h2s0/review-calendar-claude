@@ -98,4 +98,60 @@ void main() {
       expect(repository.createCalls.single.sponsoredValue?.amount, 68000);
     },
   );
+
+  testWidgets(
+    'lets the user type in a brand name the OCR failed to extract, instead '
+    'of leaving the AI-mode confirm screen stuck on an empty read-only field',
+    (tester) async {
+      final repository = FakeCampaignRepository();
+      // No labeled "업체:" line in the source screenshot — parseCampaignOcrText
+      // intentionally leaves brand unset rather than guessing (see
+      // local_campaign_ocr_test.dart), so the confirm screen must still let
+      // the user fill it in by hand.
+      const analysisResult = CampaignAnalysisResult(
+        platform: CampaignAnalysisField.confirmed('블로그'),
+        category: CampaignAnalysisField.confirmed('맛집'),
+        visitAvailability: CampaignAnalysisField.confirmed(
+          CampaignAnalysisVisitAvailability(startDate: '2026-08-12'),
+        ),
+        deadline: CampaignAnalysisField.confirmed('2026-08-20'),
+        sponsoredValue: CampaignAnalysisField.confirmed(68000),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: RcTheme.light(),
+          home: UploadFlow(
+            categories: const ['맛집', '카페', '기타'],
+            campaignRepository: repository,
+            ownerId: 'user-001',
+            imageSource: _FakeImageSource([_candidate('shot-1')]),
+            analysisService: const _FakeAnalysisService(analysisResult),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.text('갤러리에서 선택'));
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(seconds: 3));
+
+      final brandRow = find.ancestor(
+        of: find.text('업체명'),
+        matching: find.byType(Row),
+      );
+      await tester.enterText(
+        find.descendant(of: brandRow, matching: find.byType(TextField)),
+        '성수 브런치',
+      );
+      await tester.pump();
+
+      await tester.tap(find.text('캘린더에 등록하기'));
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(repository.createCallCount, 1);
+      expect(repository.createCalls.single.brand, '성수 브런치');
+    },
+  );
 }
