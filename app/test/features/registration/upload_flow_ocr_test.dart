@@ -101,6 +101,61 @@ void main() {
     },
   );
 
+  testWidgets('shows the real OCR-extracted 협찬 금액/원고료 on the confirm screen '
+      'instead of a hardcoded placeholder amount', (tester) async {
+    final repository = FakeCampaignRepository();
+    const analysisResult = CampaignAnalysisResult(
+      brand: CampaignAnalysisField.confirmed('성수 브런치'),
+      platform: CampaignAnalysisField.confirmed('블로그'),
+      category: CampaignAnalysisField.confirmed('맛집'),
+      visitAvailability: CampaignAnalysisField.confirmed(
+        CampaignAnalysisVisitAvailability(startDate: '2026-08-12'),
+      ),
+      deadline: CampaignAnalysisField.confirmed('2026-08-20'),
+      sponsoredValue: CampaignAnalysisField.confirmed(123400),
+      cashFee: CampaignAnalysisField.confirmed(45600),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: RcTheme.light(),
+        home: UploadFlow(
+          categories: const ['맛집', '카페', '기타'],
+          campaignRepository: repository,
+          ownerId: 'user-001',
+          imageSource: _FakeImageSource([_candidate('shot-1')]),
+          analysisService: const _FakeAnalysisService(analysisResult),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await tester.tap(find.text('갤러리에서 선택'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(seconds: 3));
+
+    // "수익" card is further down the ListView than the initial viewport
+    // + cache extent covers, so it isn't built until scrolled into view.
+    await tester.scrollUntilVisible(
+      find.text('협찬 금액'),
+      300,
+      scrollable: find.byType(Scrollable).first,
+    );
+    await tester.pump();
+
+    expect(find.text('123400'), findsOneWidget);
+    expect(find.text('45600'), findsOneWidget);
+    expect(find.text(formatWon(68000)), findsNothing);
+
+    await tester.tap(find.text('캘린더에 등록하기'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(repository.createCallCount, 1);
+    expect(repository.createCalls.single.sponsoredValue?.amount, 123400);
+    expect(repository.createCalls.single.cashFee?.amount, 45600);
+  });
+
   testWidgets(
     'lets the user type in a brand name the OCR failed to extract, instead '
     'of leaving the AI-mode confirm screen stuck on an empty read-only field',

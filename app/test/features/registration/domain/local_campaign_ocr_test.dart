@@ -46,6 +46,31 @@ void main() {
     expect(result.reviewFields, isEmpty);
   });
 
+  test('separates a 원고료/포인트 cash fee from the provided-item sponsored '
+      'value instead of lumping them into one amount', () {
+    final result = parseCampaignOcrText('''
+업체: 성수 브런치
+제공내역 이용권 10만원
+포인트 5,000원 지급
+''');
+
+    expect(result.sponsoredValue.value, 100000);
+    expect(result.sponsoredValue.requiresReview, isFalse);
+    expect(result.cashFee.value, 5000);
+    expect(result.cashFee.requiresReview, isFalse);
+  });
+
+  test('recognizes a "P" point-unit cash fee with no 원 suffix', () {
+    final result = parseCampaignOcrText('''
+업체: 성수 브런치
+제공내역 이용권 10만원
+적립금 3,000P 지급
+''');
+
+    expect(result.sponsoredValue.value, 100000);
+    expect(result.cashFee.value, 3000);
+  });
+
   test('falls back to the first plausible unlabeled line as a '
       'review-flagged brand guess', () {
     final result = parseCampaignOcrText('''

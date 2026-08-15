@@ -1185,133 +1185,55 @@ class _StepConfirmState extends State<_StepConfirm> {
               const SizedBox(height: 10),
               _FieldCard(
                 header: '수익',
-                children: isManual
-                    ? [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 10,
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '협찬 금액',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: colors.inkSubtle,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              _AmountField(controller: _sponsorController),
-                            ],
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '협찬 금액',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: colors.inkSubtle,
                           ),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 10,
-                          ),
-                          decoration: BoxDecoration(
-                            border: Border(
-                              top: BorderSide(color: colors.border, width: 0.5),
-                            ),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '원고료 (있는 경우만)',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: colors.inkSubtle,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              _AmountField(controller: _feeController),
-                            ],
-                          ),
-                        ),
-                      ]
-                    : [
-                        Padding(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
-                          ),
-                          child: Row(
-                            children: [
-                              SizedBox(
-                                width: 74,
-                                child: Text(
-                                  '구분',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: colors.inkSubtle,
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                child: Text(
-                                  '협찬',
-                                  style: TextStyle(
-                                    fontSize: 13.5,
-                                    fontWeight: FontWeight.w600,
-                                    color: colors.ink,
-                                  ),
-                                ),
-                              ),
-                              RcIcon(
-                                RcIconGlyph.edit,
-                                size: 14,
-                                color: colors.inkMuted,
-                              ),
-                            ],
-                          ),
-                        ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                            horizontal: 14,
-                            vertical: 12,
-                          ),
-                          decoration: BoxDecoration(
-                            border: Border(
-                              top: BorderSide(color: colors.border, width: 0.5),
-                            ),
-                          ),
-                          child: Row(
-                            children: [
-                              SizedBox(
-                                width: 74,
-                                child: Text(
-                                  '금액',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    color: colors.inkSubtle,
-                                  ),
-                                ),
-                              ),
-                              Expanded(
-                                child: Text(
-                                  formatWon(68000),
-                                  style: TextStyle(
-                                    fontSize: 13.5,
-                                    fontWeight: FontWeight.w600,
-                                    color: colors.ink,
-                                  ),
-                                ),
-                              ),
-                              RcIcon(
-                                RcIconGlyph.edit,
-                                size: 14,
-                                color: colors.inkMuted,
-                              ),
-                            ],
-                          ),
-                        ),
+                        const SizedBox(height: 6),
+                        _AmountField(controller: _sponsorController),
                       ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 14,
+                      vertical: 10,
+                    ),
+                    decoration: BoxDecoration(
+                      border: Border(
+                        top: BorderSide(color: colors.border, width: 0.5),
+                      ),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '원고료 (있는 경우만)',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: colors.inkSubtle,
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        _AmountField(controller: _feeController),
+                      ],
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 10),
               _FieldCard(
