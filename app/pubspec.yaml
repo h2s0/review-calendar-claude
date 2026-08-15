@@ -64,6 +64,16 @@ dev_dependencies:
   # package. See that file for information about deactivating specific lint
   # rules and activating additional ones.
   flutter_lints: ^6.0.0
+  flutter_launcher_icons: ^0.14.4
+
+flutter_launcher_icons:
+  # Source is the app's own RcLogo widget rendered to a PNG — see
+  # test/_generate_app_icon.dart. Re-run `dart run flutter_launcher_icons`
+  # after regenerating that source image to refresh every platform size.
+  image_path: "assets/icon/app_icon.png"
+  ios: true
+  android: true
+  remove_alpha_ios: true
 
 # For information on the generic Dart part of this file, see the
 # following page: https://dart.dev/tools/pub/pubspec
