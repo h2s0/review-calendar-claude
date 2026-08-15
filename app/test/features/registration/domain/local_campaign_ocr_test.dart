@@ -33,6 +33,27 @@ void main() {
     expect(result.reviewFields, isEmpty);
   });
 
+  test('strips a leading [지역] tag from a labeled brand name', () {
+    final result = parseCampaignOcrText('''
+업체: [수원] 스타벅스 강남점
+방문 가능 2026년 8월 12일
+포스팅 마감 2026년 8월 13일
+''');
+
+    expect(result.brand.value, '스타벅스 강남점');
+  });
+
+  test('strips a leading (지역) tag from an unlabeled brand guess', () {
+    final result = parseCampaignOcrText('''
+(수원) 스타벅스 강남점
+방문 가능 2026년 8월 12일
+포스팅 마감 2026년 8월 13일
+''');
+
+    expect(result.brand.value, '스타벅스 강남점');
+    expect(result.reviewFields, {'brand'});
+  });
+
   test('converts Korean ten-thousand won notation to sponsored value', () {
     final result = parseCampaignOcrText('''
 업체: 르봉

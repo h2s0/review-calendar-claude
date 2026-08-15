@@ -221,7 +221,7 @@ _BrandCandidate? _brandCandidate(List<String> lines) {
     final match = labeled.firstMatch(line);
     if (match != null) {
       return _BrandCandidate(
-        match.group(1)!.trim(),
+        _stripLeadingRegionTag(match.group(1)!.trim()),
         confidence: 0.95,
         needsReview: false,
       );
@@ -233,10 +233,24 @@ _BrandCandidate? _brandCandidate(List<String> lines) {
       r'\d+(?:-\d+)?\s+(.+)$',
     ).firstMatch(lines[index + 1])?.group(1)?.trim();
     if (trailingName != null && trailingName.isNotEmpty) {
-      return _BrandCandidate(trailingName, confidence: 0.8, needsReview: false);
+      return _BrandCandidate(
+        _stripLeadingRegionTag(trailingName),
+        confidence: 0.8,
+        needsReview: false,
+      );
     }
   }
   return _unlabeledBrandCandidate(lines);
+}
+
+/// Drops a leading "[수원]"/"(수원)"/"【수원】" region tag some campaign
+/// screenshots prefix the store name with — the store name itself is what
+/// belongs in 업체명, not the area it's in.
+String _stripLeadingRegionTag(String value) {
+  final stripped = value
+      .replaceFirst(RegExp(r'^(?:[\[【(（][^\]】)）]{1,12}[\]】)）]\s*)+'), '')
+      .trim();
+  return stripped.isEmpty ? value : stripped;
 }
 
 /// Falls back to the first plausible-looking line near the top of the OCR
@@ -266,7 +280,11 @@ _BrandCandidate? _unlabeledBrandCandidate(List<String> lines) {
     if (datePattern.hasMatch(line)) continue;
     if (phonePattern.hasMatch(line)) continue;
     if (moneyOnlyLine.hasMatch(line)) continue;
-    return _BrandCandidate(line, confidence: 0.5, needsReview: true);
+    return _BrandCandidate(
+      _stripLeadingRegionTag(line),
+      confidence: 0.5,
+      needsReview: true,
+    );
   }
   return null;
 }
