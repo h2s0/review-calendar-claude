@@ -48,11 +48,15 @@ CampaignAnalysisResult parseCampaignOcrText(String rawText) {
   final inferredYear = int.tryParse(
     RegExp(r'(20\d{2})년').firstMatch(normalized)?.group(1) ?? '',
   );
+  // ".lastOrNull" rather than the visit-window's ".first": a single "마감"
+  // label always has just one date, but "등록기간"-style labels give a
+  // start~end registration window — the deadline that actually matters is
+  // the window's last day, not its first.
   final deadline = _datesAfterLabel(
     lines,
-    RegExp(r'리뷰\s*마감|포스팅\s*마감|제출\s*마감|업로드\s*마감'),
+    RegExp(r'리뷰\s*마감|포스팅\s*마감|제출\s*마감|업로드\s*마감|등록\s*기간'),
     inferredYear,
-  ).firstOrNull;
+  ).lastOrNull;
   final visitDates = _datesAfterLabel(
     lines,
     RegExp(r'체험\s*기간|방문\s*기간|방문\s*가능(?!\s*시간)|체험\s*가능(?!\s*시간)'),

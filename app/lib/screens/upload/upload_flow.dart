@@ -610,10 +610,14 @@ class _StepConfirmState extends State<_StepConfirm> {
 
   /// Seeds every field from `widget.initialDraft` when present (AI mode with
   /// a real OCR result), otherwise falls back to the same baseline defaults
-  /// manual mode has always started from. AI mode's confirmed-visit panel
-  /// only ever displays a single date (see `build()` below), so a detected
-  /// date *range* collapses to its start date here rather than populating
-  /// the window fields, which AI mode never renders.
+  /// manual mode has always started from.
+  ///
+  /// A genuine OCR-detected date *range* (start != end — e.g. "체험 가능
+  /// 8/12~8/14") starts the visit as unconfirmed and pre-fills the "방문
+  /// 가능한 기간" window instead of collapsing to a single day, mirroring
+  /// how a manually-entered range behaves: the OCR only tells us the
+  /// campaign's available window, not which day within it the user will
+  /// actually visit, so that choice stays with the user.
   void _applyInitialFields() {
     final draft = widget.initialDraft;
     _brandController = TextEditingController(text: draft?.brand ?? '');
@@ -630,7 +634,22 @@ class _StepConfirmState extends State<_StepConfirm> {
     );
     _feeController = TextEditingController(text: draft?.cashFee ?? '');
 
-    final visitDateText = switch (draft?.visitAvailability) {
+    final availability = draft?.visitAvailability;
+    _visitConfirmed = switch (availability) {
+      VisitDateRangeDraft(:final start, :final end) =>
+        start.isEmpty || start == end,
+      _ => true,
+    };
+
+    final windowTime = draft?.availableTimes.firstOrNull;
+    if (!_visitConfirmed && availability is VisitDateRangeDraft) {
+      _windowStart = DateTime.tryParse(availability.start);
+      _windowEnd = DateTime.tryParse(availability.end);
+      _windowTime = windowTime?.start;
+      _windowTimeEnd = windowTime?.end;
+    }
+
+    final visitDateText = switch (availability) {
       VisitDateRangeDraft(:final start) => start,
       VisitDateOptionsDraft(dates: [final first, ...]) => first,
       _ => null,
@@ -640,7 +659,7 @@ class _StepConfirmState extends State<_StepConfirm> {
         : DateTime.tryParse(visitDateText);
     _visit = VisitSlotValue(
       date: parsedVisitDate ?? MockReviewCalendarData.d(4, 18),
-      time: draft?.availableTimes.firstOrNull?.start,
+      time: windowTime?.start,
     );
 
     final parsedDeadline = draft?.deadline == null
@@ -902,54 +921,49 @@ class _StepConfirmState extends State<_StepConfirm> {
               _FieldCard(
                 header: '일정',
                 children: [
-                  if (isManual)
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '방문일이 확정됐나요?',
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w600,
-                              color: colors.inkSubtle,
-                            ),
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(14, 12, 14, 4),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '방문일이 확정됐나요?',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: colors.inkSubtle,
                           ),
-                          const SizedBox(height: 8),
-                          Container(
-                            padding: const EdgeInsets.all(3),
-                            decoration: BoxDecoration(
-                              color: colors.backgroundAlternative,
-                              borderRadius: BorderRadius.circular(
-                                RcRadius.pill,
+                        ),
+                        const SizedBox(height: 8),
+                        Container(
+                          padding: const EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            color: colors.backgroundAlternative,
+                            borderRadius: BorderRadius.circular(RcRadius.pill),
+                          ),
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: _toggleButton(
+                                  '네, 확정됐어요',
+                                  _visitConfirmed,
+                                  () => setState(() => _visitConfirmed = true),
+                                ),
                               ),
-                            ),
-                            child: Row(
-                              children: [
-                                Expanded(
-                                  child: _toggleButton(
-                                    '네, 확정됐어요',
-                                    _visitConfirmed,
-                                    () =>
-                                        setState(() => _visitConfirmed = true),
-                                  ),
+                              Expanded(
+                                child: _toggleButton(
+                                  '아직 미정이에요',
+                                  !_visitConfirmed,
+                                  () => setState(() => _visitConfirmed = false),
                                 ),
-                                Expanded(
-                                  child: _toggleButton(
-                                    '아직 미정이에요',
-                                    !_visitConfirmed,
-                                    () =>
-                                        setState(() => _visitConfirmed = false),
-                                  ),
-                                ),
-                              ],
-                            ),
+                              ),
+                            ],
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
-                  if (!isManual || _visitConfirmed)
+                  ),
+                  if (_visitConfirmed)
                     Padding(
                       padding: const EdgeInsets.fromLTRB(14, 12, 14, 10),
                       child: Column(

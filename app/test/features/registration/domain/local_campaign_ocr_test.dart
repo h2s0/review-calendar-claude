@@ -122,4 +122,24 @@ void main() {
     expect(result.availableTimes.value?.single.start, '08:00');
     expect(result.availableTimes.value?.single.end, '23:30');
   });
+
+  test('reads the last day of a "콘텐츠 등록기간" registration window as the '
+      'deadline, not the first', () {
+    final result = parseCampaignOcrText('''
+업체: 성수 브런치
+콘텐츠 등록기간 2026년 8월 16일 ~ 2026년 8월 20일
+''');
+
+    expect(result.deadline.value, '2026-08-20');
+  });
+
+  test('recognizes "리뷰 등록기간" as a deadline label too', () {
+    final result = parseCampaignOcrText('''
+업체: 성수 브런치
+리뷰 등록기간 8월 16일 ~ 8월 20일
+2026년 8월
+''');
+
+    expect(result.deadline.value, '2026-08-20');
+  });
 }

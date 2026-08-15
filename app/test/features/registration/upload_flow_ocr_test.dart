@@ -2,7 +2,9 @@ import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:review_calendar/core/formatters.dart';
 import 'package:review_calendar/features/campaign/data/fake_campaign_repository.dart';
+import 'package:review_calendar/features/campaign/domain/visit_schedule.dart';
 import 'package:review_calendar/features/registration/domain/campaign_analysis.dart';
 import 'package:review_calendar/features/registration/domain/local_campaign_ocr.dart';
 import 'package:review_calendar/features/registration/domain/registration_image.dart';
@@ -152,6 +154,65 @@ void main() {
 
       expect(repository.createCallCount, 1);
       expect(repository.createCalls.single.brand, '성수 브런치');
+    },
+  );
+
+  testWidgets(
+    'keeps a genuine OCR-detected date range as an unconfirmed "방문 가능한 '
+    '기간" window instead of collapsing it to a single confirmed day',
+    (tester) async {
+      final repository = FakeCampaignRepository();
+      const analysisResult = CampaignAnalysisResult(
+        brand: CampaignAnalysisField.confirmed('성수 브런치'),
+        platform: CampaignAnalysisField.confirmed('블로그'),
+        category: CampaignAnalysisField.confirmed('맛집'),
+        visitAvailability: CampaignAnalysisField.confirmed(
+          CampaignAnalysisVisitAvailability(
+            startDate: '2026-08-12',
+            endDate: '2026-08-14',
+          ),
+        ),
+        deadline: CampaignAnalysisField.confirmed('2026-08-20'),
+        sponsoredValue: CampaignAnalysisField.confirmed(68000),
+      );
+
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: RcTheme.light(),
+          home: UploadFlow(
+            categories: const ['맛집', '카페', '기타'],
+            campaignRepository: repository,
+            ownerId: 'user-001',
+            imageSource: _FakeImageSource([_candidate('shot-1')]),
+            analysisService: const _FakeAnalysisService(analysisResult),
+          ),
+        ),
+      );
+      await tester.pump(const Duration(milliseconds: 100));
+
+      await tester.tap(find.text('갤러리에서 선택'));
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(seconds: 3));
+
+      // The window, not the single-date panel, is showing — pre-filled from
+      // the OCR range rather than requiring the user to open the picker.
+      expect(
+        find.text(
+          '${shortDateLabel(DateTime(2026, 8, 12))} ~ '
+          '${shortDateLabel(DateTime(2026, 8, 14))}',
+        ),
+        findsOneWidget,
+      );
+
+      await tester.tap(find.text('캘린더에 등록하기'));
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(repository.createCallCount, 1);
+      final saved = repository.createCalls.single.visitAvailability;
+      expect(saved, isA<VisitDateRange>());
+      expect((saved as VisitDateRange).start.toString(), '2026-08-12');
+      expect(saved.end.toString(), '2026-08-14');
     },
   );
 }
