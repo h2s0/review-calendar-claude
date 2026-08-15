@@ -66,17 +66,20 @@ CampaignAnalysisResult parseCampaignOcrText(String rawText) {
     r'(?<!\d)(01[016789])[-\s]?(\d{3,4})[-\s]?(\d{4})(?!\d)',
   ).firstMatch(normalized);
   // "제공내역"-style amounts (협찬 물품/서비스 가치) go to sponsoredValue;
-  // 원고료/포인트/적립금-style amounts (현금성 보상) go to cashFee instead —
-  // classified per line so a screenshot listing both ("이용권 10만원" +
-  // "포인트 5,000원 지급") doesn't lump them into one field.
-  final cashFeeLabel = RegExp(r'원고료|고료|포인트|적립금|리뷰\s*비|작성비|페이백');
+  // 원고료/적립금-style amounts (현금성 보상) go to cashFee instead. A
+  // point-unit amount ("5,000P"/"5,000포인트") is always cashFee on its
+  // own — the unit itself is the signal — so a line mixing both ("70,000원
+  // 이용권, 10,000 포인트") doesn't get swept entirely into one field just
+  // because "포인트" appears somewhere on it.
+  final cashFeeLabel = RegExp(r'원고료|고료|적립금|리뷰\s*비|작성비|페이백');
   final sponsoredAmounts = <int>[];
   final cashFeeAmounts = <int>[];
   for (final line in lines) {
-    final lineAmounts = _amountsInLine(line);
-    if (lineAmounts.isEmpty) continue;
+    cashFeeAmounts.addAll(_pointAmountsInLine(line));
+    final wonAmounts = _wonAmountsInLine(line);
+    if (wonAmounts.isEmpty) continue;
     (cashFeeLabel.hasMatch(line) ? cashFeeAmounts : sponsoredAmounts).addAll(
-      lineAmounts,
+      wonAmounts,
     );
   }
   final amountNeedsReview =
@@ -147,11 +150,8 @@ CampaignAnalysisResult parseCampaignOcrText(String rawText) {
   );
 }
 
-/// Won amounts (both "68,000원" and "10만원" notation), plus point-style
-/// amounts ("5,000P"/"5,000포인트") whose unit alone marks them as a
-/// cash-like reward regardless of whether a 원고료/포인트 label is also on
-/// the line.
-List<int> _amountsInLine(String line) {
+/// Won amounts on a line, in both "68,000원" and "10만원" notation.
+List<int> _wonAmountsInLine(String line) {
   final wonAmounts = RegExp(r'(?<!\d)(\d{1,3}(?:,\d{3})+|\d{4,})\s*원')
       .allMatches(line)
       .map((match) => int.tryParse(match.group(1)!.replaceAll(',', '')))
@@ -161,11 +161,18 @@ List<int> _amountsInLine(String line) {
       .map((match) => double.tryParse(match.group(1)!))
       .whereType<double>()
       .map((amount) => (amount * 10000).round());
-  final pointAmounts = RegExp(r'(?<!\d)(\d{1,3}(?:,\d{3})+|\d{4,})\s*(?:P|포인트)')
+  return [...wonAmounts, ...tenThousandWonAmounts];
+}
+
+/// Point-style amounts ("5,000P"/"5,000포인트") — the unit alone marks
+/// these as a cash-like reward, so they're always treated as cashFee even
+/// when a won-denominated sponsored-item amount shares the same line.
+List<int> _pointAmountsInLine(String line) {
+  return RegExp(r'(?<!\d)(\d{1,3}(?:,\d{3})+|\d{4,})\s*(?:P|포인트)')
       .allMatches(line)
       .map((match) => int.tryParse(match.group(1)!.replaceAll(',', '')))
-      .whereType<int>();
-  return [...wonAmounts, ...tenThousandWonAmounts, ...pointAmounts];
+      .whereType<int>()
+      .toList(growable: false);
 }
 
 CampaignAnalysisField<String> _confirmedField(String? value) {

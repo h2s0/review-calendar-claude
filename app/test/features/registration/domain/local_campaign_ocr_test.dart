@@ -46,12 +46,12 @@ void main() {
     expect(result.reviewFields, isEmpty);
   });
 
-  test('separates a 원고료/포인트 cash fee from the provided-item sponsored '
+  test('separates a 원고료 cash fee from the provided-item sponsored '
       'value instead of lumping them into one amount', () {
     final result = parseCampaignOcrText('''
 업체: 성수 브런치
 제공내역 이용권 10만원
-포인트 5,000원 지급
+원고료 5,000원 지급
 ''');
 
     expect(result.sponsoredValue.value, 100000);
@@ -69,6 +69,17 @@ void main() {
 
     expect(result.sponsoredValue.value, 100000);
     expect(result.cashFee.value, 3000);
+  });
+
+  test('keeps a voucher amount and a same-line 포인트 amount separate even '
+      'when they share one line ("70000원 이용권, 10000 포인트")', () {
+    final result = parseCampaignOcrText('''
+업체: 성수 브런치
+70000원 이용권, 10000 포인트
+''');
+
+    expect(result.sponsoredValue.value, 70000);
+    expect(result.cashFee.value, 10000);
   });
 
   test('falls back to the first plausible unlabeled line as a '
