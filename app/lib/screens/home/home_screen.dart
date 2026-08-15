@@ -112,25 +112,31 @@ class _HomeDashboardState extends State<HomeDashboard> {
                 ],
               ),
             ),
-            _SectionBlock(
-              title: '다가오는 일정',
-              subtitle: '${weekEvents.length}건',
-              child: weekEvents.isEmpty
-                  ? const _EmptyRow(text: '이번 주는 예정된 일정이 없어요')
-                  : SizedBox(
-                      height: 108,
-                      child: ListView.separated(
-                        scrollDirection: Axis.horizontal,
-                        itemCount: weekEvents.length.clamp(0, 8),
-                        separatorBuilder: (_, _) => const SizedBox(width: 8),
-                        itemBuilder: (context, i) => _WeekEventCard(
-                          event: weekEvents[i],
-                          campaignById: widget.viewModel.campaignById,
-                          onOpenCampaign: widget.onOpenCampaign,
+            if (widget.viewModel.hasLoaded && !widget.viewModel.hasAnyCampaigns)
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+                child: _FirstRunPrompt(onOpenUpload: widget.onOpenUpload),
+              )
+            else
+              _SectionBlock(
+                title: '다가오는 일정',
+                subtitle: '${weekEvents.length}건',
+                child: weekEvents.isEmpty
+                    ? const _EmptyRow(text: '이번 주는 예정된 일정이 없어요')
+                    : SizedBox(
+                        height: 108,
+                        child: ListView.separated(
+                          scrollDirection: Axis.horizontal,
+                          itemCount: weekEvents.length.clamp(0, 8),
+                          separatorBuilder: (_, _) => const SizedBox(width: 8),
+                          itemBuilder: (context, i) => _WeekEventCard(
+                            event: weekEvents[i],
+                            campaignById: widget.viewModel.campaignById,
+                            onOpenCampaign: widget.onOpenCampaign,
+                          ),
                         ),
                       ),
-                    ),
-            ),
+              ),
             Padding(
               padding: const EdgeInsets.fromLTRB(16, 14, 16, 0),
               child: _HomeGoalPush(
@@ -251,6 +257,53 @@ class _SectionBlock extends StatelessWidget {
           ),
           child,
         ],
+      ),
+    );
+  }
+}
+
+/// Shown in place of "다가오는 일정" only for a brand-new account with zero
+/// campaigns ever registered — same card/row language as
+/// `_HomeGoalPush`'s "이번 달 목표가 없어요" empty variant, just with its own
+/// copy and pointing at the upload flow instead of the revenue tab.
+class _FirstRunPrompt extends StatelessWidget {
+  const _FirstRunPrompt({required this.onOpenUpload});
+  final VoidCallback onOpenUpload;
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.rcColors;
+    return InkWell(
+      onTap: onOpenUpload,
+      borderRadius: BorderRadius.circular(RcRadius.large),
+      child: Container(
+        padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+        decoration: BoxDecoration(
+          color: colors.card,
+          borderRadius: BorderRadius.circular(RcRadius.large),
+          border: Border.all(color: colors.border),
+        ),
+        child: Row(
+          children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    '첫 체험단을 등록해보세요',
+                    style: Theme.of(context).textTheme.titleSmall,
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '스크린샷 한 장이면 일정이 자동으로 정리돼요',
+                    style: Theme.of(context).textTheme.labelMedium,
+                  ),
+                ],
+              ),
+            ),
+            RcIcon(RcIconGlyph.chevronRight, size: 14, color: colors.inkMuted),
+          ],
+        ),
       ),
     );
   }

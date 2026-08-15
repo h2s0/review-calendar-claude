@@ -30,6 +30,10 @@ class HomeViewModel extends ChangeNotifier {
   int get thisMonthRevenueTotal => _thisMonthRevenueTotal;
   int get thisMonthRevenueFee => _thisMonthRevenueFee;
   bool get hasLoaded => _hasLoaded;
+  // Distinguishes "never registered a single campaign" (a first-run empty
+  // state) from "registered some, just none due this week" — the latter
+  // keeps the existing "이번 주는 예정된 일정이 없어요" row as-is.
+  bool get hasAnyCampaigns => _campaigns.isNotEmpty;
 
   ui.Campaign? campaignById(String id) {
     for (final campaign in _campaigns) {

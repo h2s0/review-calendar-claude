@@ -57,4 +57,25 @@ void main() {
       expect(find.text('미정 일정'), findsOneWidget);
     },
   );
+
+  testWidgets(
+    'shows the first-run prompt instead of the week-events row when the '
+    'account has no campaigns at all, and tapping it opens the upload flow',
+    (tester) async {
+      final repository = FakeCampaignRepository();
+
+      await tester.pumpReviewCalendarApp(campaignRepository: repository);
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 100));
+
+      expect(find.text('첫 체험단을 등록해보세요'), findsOneWidget);
+      expect(find.text('이번 주는 예정된 일정이 없어요'), findsNothing);
+
+      await tester.tap(find.text('첫 체험단을 등록해보세요'));
+      await tester.pump(const Duration(milliseconds: 100));
+      await tester.pump(const Duration(milliseconds: 400));
+
+      expect(find.text('스크린샷 자동 등록'), findsOneWidget);
+    },
+  );
 }
