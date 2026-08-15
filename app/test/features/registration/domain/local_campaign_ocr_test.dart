@@ -1,10 +1,15 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:review_calendar/features/registration/domain/local_campaign_ocr.dart';
 
-/// Ported verbatim from
+/// Originally ported verbatim from
 /// review-calendar/app/test/features/registration/domain/local_campaign_ocr_test.dart
-/// — `parseCampaignOcrText` itself was ported byte-for-byte, so its test
-/// fixtures apply unchanged.
+/// — most fixtures still apply unchanged. Brand extraction has since
+/// diverged from the sibling: this project's confirm screen lets the user
+/// edit every field regardless of how it was filled in (see
+/// `upload_flow.dart`'s `_LabeledField`), so a wrong guess costs nothing
+/// more than the blank field it replaces — unlike the sibling, this parser
+/// takes a best-effort guess at an unlabeled brand name instead of leaving
+/// it blank.
 void main() {
   test('confirms fields extracted from explicit Korean labels', () {
     final result = parseCampaignOcrText('''
@@ -41,14 +46,27 @@ void main() {
     expect(result.reviewFields, isEmpty);
   });
 
-  test('leaves brand empty instead of guessing from an unlabeled line', () {
+  test('falls back to the first plausible unlabeled line as a '
+      'review-flagged brand guess', () {
     final result = parseCampaignOcrText('''
 성수 브런치
 방문 가능 2026년 8월 12일
 포스팅 마감 2026년 8월 13일
 ''');
 
-    expect(result.brand.value, isNull);
+    expect(result.brand.value, '성수 브런치');
+    expect(result.reviewFields, {'brand'});
+  });
+
+  test('skips generic prompt/label lines when guessing an unlabeled brand', () {
+    final result = parseCampaignOcrText('''
+어떤 체험단을 찾고 있나요?
+성수 브런치
+방문 가능 2026년 8월 12일
+포스팅 마감 2026년 8월 13일
+''');
+
+    expect(result.brand.value, '성수 브런치');
     expect(result.reviewFields, {'brand'});
   });
 

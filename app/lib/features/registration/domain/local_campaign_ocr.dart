@@ -193,6 +193,38 @@ _BrandCandidate? _brandCandidate(List<String> lines) {
       return _BrandCandidate(trailingName, confidence: 0.8, needsReview: false);
     }
   }
+  return _unlabeledBrandCandidate(lines);
+}
+
+/// Falls back to the first plausible-looking line near the top of the OCR
+/// text when nothing was explicitly labeled — many real campaign
+/// screenshots put the store/brand name as the very first line with no
+/// "업체:" prefix. Always `needsReview: true` since it's a guess rather
+/// than a confirmed match; the confirm screen lets the user correct it
+/// either way, so a wrong guess costs no more than the blank field it
+/// replaces.
+_BrandCandidate? _unlabeledBrandCandidate(List<String> lines) {
+  const platforms = {'블로그', '인스타그램', '유튜브', '틱톡'};
+  final nonBrandLine = RegExp(
+    r'방문\s*주소|방문\s*정보|방문\s*가능|방문\s*기간|체험\s*가능|체험\s*기간|'
+    r'체험단\s*미션|담당자|리뷰\s*마감|포스팅\s*마감|제출\s*마감|업로드\s*마감|'
+    r'카테고리|연락처',
+  );
+  final datePattern = RegExp(r'\d{1,4}[.\-/월년]\s*\d{1,2}');
+  final phonePattern = RegExp(r'01[016789][-\s]?\d{3,4}[-\s]?\d{4}');
+  final moneyOnlyLine = RegExp(r'^\d[\d,]*\s*원$|^\d+(?:\.\d+)?\s*만\s*원$');
+
+  for (final line in lines.take(6)) {
+    if (line.length < 2 || line.length > 40) continue;
+    if (line.endsWith('?')) continue;
+    if (platforms.contains(line)) continue;
+    if (defaultRecordCategories.contains(line)) continue;
+    if (nonBrandLine.hasMatch(line)) continue;
+    if (datePattern.hasMatch(line)) continue;
+    if (phonePattern.hasMatch(line)) continue;
+    if (moneyOnlyLine.hasMatch(line)) continue;
+    return _BrandCandidate(line, confidence: 0.5, needsReview: true);
+  }
   return null;
 }
 
