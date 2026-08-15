@@ -43,7 +43,8 @@ void main() {
     expect(result.brand.value, '스타벅스 강남점');
   });
 
-  test('strips a leading (지역) tag from an unlabeled brand guess', () {
+  test('strips a leading (지역) tag and confidently recognizes the '
+      'region-tagged line as the brand, without needing review', () {
     final result = parseCampaignOcrText('''
 (수원) 스타벅스 강남점
 방문 가능 2026년 8월 12일
@@ -51,7 +52,19 @@ void main() {
 ''');
 
     expect(result.brand.value, '스타벅스 강남점');
-    expect(result.reviewFields, {'brand'});
+    expect(result.reviewFields, isEmpty);
+  });
+
+  test('prefers a region-tagged line over an earlier recruitment-badge line '
+      'when guessing an unlabeled brand', () {
+    final result = parseCampaignOcrText('''
+마감임박 5명 모집
+[수원 권선동] 소담촌 롯데마트수원권선점
+방문 가능 2026년 8월 12일
+포스팅 마감 2026년 8월 13일
+''');
+
+    expect(result.brand.value, '소담촌 롯데마트수원권선점');
   });
 
   test('converts Korean ten-thousand won notation to sponsored value', () {

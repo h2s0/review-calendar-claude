@@ -240,6 +240,20 @@ _BrandCandidate? _brandCandidate(List<String> lines) {
       );
     }
   }
+  // A "[지역] 상호명" line is a strong, specific structural signal many
+  // campaign platforms use for the listing title — check every line for
+  // it before falling back to the weaker "just take the first plausible
+  // line" guess below, so a promo badge line ("마감임박 5명 모집") earlier
+  // in the OCR order can't outrank the real, region-tagged store name.
+  final regionTagged = RegExp(r'^[\[【(（][^\]】)）]{1,12}[\]】)）]\s*\S');
+  for (final line in lines) {
+    if (!regionTagged.hasMatch(line)) continue;
+    return _BrandCandidate(
+      _stripLeadingRegionTag(line),
+      confidence: 0.85,
+      needsReview: false,
+    );
+  }
   return _unlabeledBrandCandidate(lines);
 }
 
@@ -265,7 +279,10 @@ _BrandCandidate? _unlabeledBrandCandidate(List<String> lines) {
   final nonBrandLine = RegExp(
     r'방문\s*주소|방문\s*정보|방문\s*가능|방문\s*기간|체험\s*가능|체험\s*기간|'
     r'체험단\s*미션|담당자|리뷰\s*마감|포스팅\s*마감|제출\s*마감|업로드\s*마감|'
-    r'카테고리|연락처',
+    r'카테고리|연락처|'
+    // Recruitment/urgency badges ("마감임박 5명 모집", "선착순 3명") — easy
+    // to mistake for the brand name since they carry no other label.
+    r'마감임박|선착순|명\s*모집|모집\s*중|D-\d+',
   );
   final datePattern = RegExp(r'\d{1,4}[.\-/월년]\s*\d{1,2}');
   final phonePattern = RegExp(r'01[016789][-\s]?\d{3,4}[-\s]?\d{4}');

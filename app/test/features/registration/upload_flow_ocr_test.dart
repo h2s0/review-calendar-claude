@@ -270,4 +270,48 @@ void main() {
       expect(saved.end.toString(), '2026-08-14');
     },
   );
+
+  testWidgets('suggests 체험 종료일 다음날 as the deadline when OCR found a visit '
+      'range but no explicit deadline, instead of an unrelated placeholder', (
+    tester,
+  ) async {
+    final repository = FakeCampaignRepository();
+    const analysisResult = CampaignAnalysisResult(
+      brand: CampaignAnalysisField.confirmed('성수 브런치'),
+      platform: CampaignAnalysisField.confirmed('블로그'),
+      category: CampaignAnalysisField.confirmed('맛집'),
+      visitAvailability: CampaignAnalysisField.confirmed(
+        CampaignAnalysisVisitAvailability(
+          startDate: '2026-08-12',
+          endDate: '2026-08-14',
+        ),
+      ),
+      sponsoredValue: CampaignAnalysisField.confirmed(68000),
+    );
+
+    await tester.pumpWidget(
+      MaterialApp(
+        theme: RcTheme.light(),
+        home: UploadFlow(
+          categories: const ['맛집', '카페', '기타'],
+          campaignRepository: repository,
+          ownerId: 'user-001',
+          imageSource: _FakeImageSource([_candidate('shot-1')]),
+          analysisService: const _FakeAnalysisService(analysisResult),
+        ),
+      ),
+    );
+    await tester.pump(const Duration(milliseconds: 100));
+
+    await tester.tap(find.text('갤러리에서 선택'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(seconds: 3));
+
+    await tester.tap(find.text('캘린더에 등록하기'));
+    await tester.pump(const Duration(milliseconds: 100));
+    await tester.pump(const Duration(milliseconds: 400));
+
+    expect(repository.createCallCount, 1);
+    expect(repository.createCalls.single.deadline.toString(), '2026-08-15');
+  });
 }

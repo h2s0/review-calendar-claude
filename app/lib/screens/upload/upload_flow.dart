@@ -669,7 +669,19 @@ class _StepConfirmState extends State<_StepConfirm> {
       _deadline = parsedDeadline;
       _deadlineAuto = false;
     } else {
-      _deadline = MockReviewCalendarData.d(5, 2);
+      // No deadline detected/entered — suggest 체험 종료일 다음날 (same
+      // convention `_editWindow`'s callback below already uses once the
+      // user picks a window), rather than falling back to an arbitrary
+      // placeholder date unrelated to today. `_deadlineAuto: true` keeps
+      // this an editable suggestion, not a silently-committed value.
+      final visitEnd = switch (availability) {
+        VisitDateRangeDraft(:final end) => DateTime.tryParse(end),
+        _ => null,
+      };
+      _deadline = visitEnd != null
+          ? visitEnd.add(const Duration(days: 1))
+          : DateTime.now().add(const Duration(days: 7));
+      _deadlineAuto = true;
     }
   }
 
@@ -1095,90 +1107,41 @@ class _StepConfirmState extends State<_StepConfirm> {
                         top: BorderSide(color: colors.border, width: 0.5),
                       ),
                     ),
-                    child: isManual
-                        ? Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                '포스팅 마감',
-                                style: TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w600,
-                                  color: colors.inkSubtle,
-                                ),
-                              ),
-                              const SizedBox(height: 6),
-                              _DateField(
-                                date: _deadline,
-                                onChanged: (d) => setState(() {
-                                  _deadline = d;
-                                  _deadlineAuto = false;
-                                }),
-                              ),
-                              if (!_visitConfirmed)
-                                Padding(
-                                  padding: const EdgeInsets.only(top: 6),
-                                  child: Text(
-                                    _deadlineAuto
-                                        ? '체험 종료일 다음날로 자동 설정했어요 · 다르다면 직접 수정하세요'
-                                        : '직접 수정한 마감일이에요',
-                                    style: TextStyle(
-                                      fontSize: 10.5,
-                                      color: colors.inkSubtle,
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          )
-                        : Row(
-                            children: [
-                              SizedBox(
-                                width: 74,
-                                child: Text(
-                                  '포스팅 마감',
-                                  style: TextStyle(
-                                    fontSize: 12,
-                                    fontWeight: FontWeight.w500,
-                                    color: colors.inkSubtle,
-                                  ),
-                                ),
-                              ),
-                              Container(
-                                padding: const EdgeInsets.symmetric(
-                                  horizontal: 8,
-                                  vertical: 3,
-                                ),
-                                decoration: BoxDecoration(
-                                  color: colors.deadline.soft,
-                                  borderRadius: BorderRadius.circular(
-                                    RcRadius.pill,
-                                  ),
-                                ),
-                                child: Row(
-                                  mainAxisSize: MainAxisSize.min,
-                                  children: [
-                                    Container(
-                                      width: 5,
-                                      height: 5,
-                                      decoration: BoxDecoration(
-                                        color: colors.deadline.ink,
-                                        shape: BoxShape.circle,
-                                      ),
-                                    ),
-                                    const SizedBox(width: 5),
-                                    Text(
-                                      '${_deadline.year}.${_deadline.month.toString().padLeft(2, '0')}.${_deadline.day.toString().padLeft(2, '0')}',
-                                      style: TextStyle(
-                                        fontSize: 12.5,
-                                        fontWeight: FontWeight.w600,
-                                        color: colors.deadline.ink,
-                                      ),
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
+                    // Always editable — even in AI mode, since a detected
+                    // (or suggested-from-visit-end) deadline can be wrong or
+                    // simply not what the campaign actually says.
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          '포스팅 마감',
+                          style: TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: colors.inkSubtle,
                           ),
+                        ),
+                        const SizedBox(height: 6),
+                        _DateField(
+                          date: _deadline,
+                          onChanged: (d) => setState(() {
+                            _deadline = d;
+                            _deadlineAuto = false;
+                          }),
+                        ),
+                        if (_deadlineAuto)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 6),
+                            child: Text(
+                              '체험 종료일 다음날로 자동 설정했어요 · 다르다면 직접 수정하세요',
+                              style: TextStyle(
+                                fontSize: 10.5,
+                                color: colors.inkSubtle,
+                              ),
+                            ),
+                          ),
+                      ],
+                    ),
                   ),
                 ],
               ),
