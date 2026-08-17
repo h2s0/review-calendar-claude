@@ -8,6 +8,7 @@ import 'package:review_calendar/features/campaign/data/campaign_repository.dart'
 import 'package:review_calendar/features/home/presentation/home_view_model.dart';
 import 'package:review_calendar/features/notification/domain/notification_device_registration.dart';
 import 'package:review_calendar/features/records/data/record_categories_repository.dart';
+import 'package:review_calendar/features/registration/domain/local_campaign_ocr.dart';
 import 'package:review_calendar/features/revenue/presentation/revenue_view_model.dart';
 import 'package:review_calendar/screens/calendar/calendar_screen.dart';
 import 'package:review_calendar/screens/detail/campaign_detail_sheet.dart';
@@ -32,6 +33,7 @@ class AppShell extends StatefulWidget {
     required this.categoriesRepository,
     required this.ownerId,
     this.notificationRegistration,
+    this.analysisService,
     super.key,
   });
 
@@ -43,6 +45,9 @@ class AppShell extends StatefulWidget {
   final RecordCategoriesRepository categoriesRepository;
   final String ownerId;
   final NotificationDeviceRegistrationController? notificationRegistration;
+  // Nullable: null lets UploadFlow fall back to its own default (currently
+  // the on-device OCR path); production wires the Gemini-backed service in.
+  final LocalCampaignAnalysisService? analysisService;
 
   @override
   State<AppShell> createState() => _AppShellState();
@@ -89,6 +94,7 @@ class _AppShellState extends State<AppShell> {
           campaignRepository: widget.campaignRepository,
           ownerId: widget.ownerId,
           notificationRegistration: widget.notificationRegistration,
+          analysisService: widget.analysisService,
         ),
       ),
     );

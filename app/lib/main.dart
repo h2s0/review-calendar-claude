@@ -5,6 +5,7 @@ import 'package:cloud_functions/cloud_functions.dart';
 import 'package:firebase_auth/firebase_auth.dart' as firebase;
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:review_calendar/app/app_shell.dart';
@@ -27,6 +28,10 @@ import 'package:review_calendar/features/notification/data/firebase_notification
 import 'package:review_calendar/features/notification/domain/notification_device_registration.dart';
 import 'package:review_calendar/features/records/data/firestore_record_categories_repository.dart';
 import 'package:review_calendar/features/records/data/record_categories_repository.dart';
+import 'package:review_calendar/features/registration/data/apple_vision_campaign_ocr_engine.dart';
+import 'package:review_calendar/features/registration/data/fallback_campaign_analysis_service.dart';
+import 'package:review_calendar/features/registration/data/gemini_campaign_analysis_service.dart';
+import 'package:review_calendar/features/registration/domain/local_campaign_ocr.dart';
 import 'package:review_calendar/features/revenue/presentation/revenue_view_model.dart';
 import 'package:review_calendar/ui/core/theme/rc_theme.dart';
 
@@ -90,6 +95,19 @@ Future<void> main() async {
               FirebaseFirestore.instance,
             ),
           ),
+      // Gemini first (understands screenshot context/layout); silently
+      // falls back to the on-device Vision OCR path if the free-tier quota
+      // is exhausted, rate-limited, or the network/provider is down.
+      analysisServiceFactory: (user) => FallbackCampaignAnalysisService(
+        primary: GeminiCampaignAnalysisService(
+          functions: functions,
+          storage: FirebaseStorage.instance,
+          ownerId: user.id,
+        ),
+        fallback: const OcrCampaignAnalysisService(
+          AppleVisionCampaignOcrEngine(),
+        ),
+      ),
     ),
   );
 }
@@ -133,6 +151,7 @@ class ReviewCalendarApp extends StatefulWidget {
     required this.campaignRepositoryFactory,
     required this.categoriesRepositoryFactory,
     this.notificationRegistrationFactory,
+    this.analysisServiceFactory,
     super.key,
   });
 
@@ -144,6 +163,10 @@ class ReviewCalendarApp extends StatefulWidget {
   // exercise the product flows, matching the sibling's own optional wiring.
   final NotificationDeviceRegistrationController Function(AuthUser user)?
   notificationRegistrationFactory;
+  // Nullable: null lets UploadFlow fall back to its own default (currently
+  // the on-device OCR path) — tests inject a fake instead of this factory.
+  final LocalCampaignAnalysisService Function(AuthUser user)?
+  analysisServiceFactory;
 
   @override
   State<ReviewCalendarApp> createState() => _ReviewCalendarAppState();
@@ -180,6 +203,7 @@ class _ReviewCalendarAppState extends State<ReviewCalendarApp> {
           categoriesRepository: widget.categoriesRepositoryFactory(user),
           notificationRegistration: widget.notificationRegistrationFactory
               ?.call(user),
+          analysisService: widget.analysisServiceFactory?.call(user),
         ),
       ),
     );
@@ -196,6 +220,7 @@ class _AuthenticatedApp extends StatefulWidget {
     required this.categoriesRepository,
     required this.ownerId,
     this.notificationRegistration,
+    this.analysisService,
     super.key,
   });
 
@@ -204,6 +229,7 @@ class _AuthenticatedApp extends StatefulWidget {
   final RecordCategoriesRepository categoriesRepository;
   final String ownerId;
   final NotificationDeviceRegistrationController? notificationRegistration;
+  final LocalCampaignAnalysisService? analysisService;
 
   @override
   State<_AuthenticatedApp> createState() => _AuthenticatedAppState();
@@ -255,6 +281,7 @@ class _AuthenticatedAppState extends State<_AuthenticatedApp> {
       categoriesRepository: widget.categoriesRepository,
       ownerId: widget.ownerId,
       notificationRegistration: widget.notificationRegistration,
+      analysisService: widget.analysisService,
     );
   }
 }
